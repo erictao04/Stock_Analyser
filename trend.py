@@ -1,5 +1,5 @@
 import openpyxl
-import yahoo_fin
+import yfinance as yf
 import os
 
 
@@ -9,45 +9,47 @@ class Trend:
     def __init__(self, ticker, after_gain=True, increase=True, append=True, results_path='Results/results.xlsx'):
         self.after_gain = after_gain
         self.increase = True
-        self.ticker = ticker
+        self.ticker = ticker.upper()
         self.append = append
         self.results_path = results_path
+
+    def get_data(self):
+        self.closes = yf.Ticker(self.ticker).history(period="max")['Close']
 
     def get_results(self):
         '''Find probabililties'''
         def count(current_close, previous_close, previous_result):
             '''Adds to counts'''
             if current_close > previous_close:
-                gain_days += 1
+                self.gain_days += 1
 
                 if previous_result == 'gain':
-                    gain_after_gain += 1
+                    self.gain_after_gain += 1
                     return 'gain'
                 elif previous_result == 'loss':
-                    gain_after_loss += 1
+                    self.gain_after_loss += 1
                     return 'gain'
 
-            elif previous_close < current_close:
-                loss_days += 1
+            elif current_close < previous_close:
+                self.loss_days += 1
 
                 return 'loss'
 
             return
 
-        gain_days = 0
-        loss_days = 0
-        gain_after_gain = 0
-        gain_after_loss = 0
+        self.gain_days, self.loss_days, self.gain_after_gain, self.gain_after_loss = 0, 0, 0, 0
 
-        dummy_list = []
-        previous_close = dummy_list[0]
+        previous_close = self.closes[0]
         previous_result = None
 
-        for close in dummy_list[1:]:
+        for (date, close) in self.closes[1:].iteritems():
             previous_result = count(close, previous_close, previous_result)
+            previous_close = close
 
-        self.gain_after_gain_prob = round(gain_after_gain / gain_days, 2)
-        self.gain_after_loss_prob = round(gain_after_loss / loss_days, 2)
+        self.gain_after_gain_prob = round(
+            self.gain_after_gain / self.gain_days, 2)
+        self.gain_after_loss_prob = round(
+            self.gain_after_loss / self.loss_days, 2)
 
     def export_results(self):
         '''Export results into Excel Sheets'''
@@ -75,9 +77,12 @@ class Trend:
 
 
 if __name__ == '__main__':
-    tickers = []
+    tickers = ['AC', 'ADP', 'AEE', 'AGI', 'AI']
 
     for ticker in tickers:
         stock = Trend(ticker)
+        stock.get_data()
         stock.get_results()
-        stock.export_results()
+        print(
+            f'''After gain: {stock.gain_after_gain_prob}%, After loss: {stock.gain_after_loss_prob}%''')
+#        stock.export_results()
