@@ -1,5 +1,4 @@
 import openpyxl
-from openpyxl import styles
 import yfinance as yf
 import csv
 import os
