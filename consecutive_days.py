@@ -1,4 +1,4 @@
-from trend import MultiTrends
+from trend import MultiTrends, Trend
 import yfinance as yf
 from pandas_datareader import data as pdr
 import openpyxl
@@ -24,10 +24,11 @@ class ConsecutiveDays:
     def get_data(self, ticker=None):
         yf.pdr_override()
         if ticker:
-            self.closes = pdr.get_data_yahoo(ticker)['Close']
+            self.closes = pdr.get_data_yahoo(
+                ticker, start='1990-01-01')['Close']
         else:
             self.closes = pdr.get_data_yahoo(
-                self.ticker)['Close']
+                self.ticker, start='1990-01-01')['Close']
 
         try:
             self.closes[0]
@@ -49,7 +50,7 @@ class ConsecutiveDays:
                         (range_end - range_start) / range_end * 100 / streak, 2)
                 else:
                     avg_change = round(
-                        (range_start - range_end) / range_start * 100 / streak, 2)
+                        (range_start - range_end) / range_start * -100 / streak, 2)
 
                 self.results.append((streak, ticker, avg_change))
                 self.avg_counter.setdefault(streak, [0, 0])
@@ -84,7 +85,7 @@ class ConsecutiveDays:
         if self.multi_stocks:
             return self.results, self.avg_counter
 
-    def export_results(self, results=None, avg_changes=None, ticker=None):
+    def export_results(self, results=None, avg_changes=None, ticker=None, avg_count=None):
         '''Exports results into Excel Sheets'''
 
         centered = Alignment(horizontal='center')
@@ -150,13 +151,25 @@ class ConsecutiveDays:
             sheet['G3'].border = Border(bottom=med)
             sheet['H3'].border = Border(right=med, bottom=med)
 
-            for i in range(2, 9):
+            sheet.merge_cells('J2:L2')
+            sheet['J2'].border = Border(left=med, top=med, bottom=med)
+            sheet['K2'].border = Border(top=med, bottom=med)
+            sheet['L2'].border = Border(right=med, top=med, bottom=med)
+            sheet['J2'] = 'Frequency Count'
+            sheet['J3'] = 'Index'
+            sheet['K3'] = 'Consecutive Days'
+            sheet['L3'] = 'Frequency'
+            sheet['J3'].border = Border(left=med, bottom=med)
+            sheet['K3'].border = Border(bottom=med)
+            sheet['L3'].border = Border(right=med, bottom=med)
+
+            for i in range(2, 13):
                 letter = get_column_letter(i)
-                if letter in ['B', 'F']:
+                if letter in ['B', 'F', 'J']:
                     sheet[f'{letter}2'].alignment = centered
                 sheet[f'{letter}3'].alignment = centered
 
-            col_width(['B', 'C', 'D', 'F', 'G', 'H'])
+            col_width(['B', 'C', 'D', 'F', 'G', 'H', 'J', 'K', 'L'])
 
             return wb, sheet
 
@@ -190,6 +203,13 @@ class ConsecutiveDays:
                 else:
                     add_data(letters, self.ticker)
 
+            elif table == 'Avg Count':
+                letters = ['J', 'K', 'L']
+                if self.multi_stocks:
+                    add_data(letters, ticker.upper())
+                else:
+                    add_data(letters, self.ticker)
+
             return sheet
 
         if not results:
@@ -197,6 +217,9 @@ class ConsecutiveDays:
 
         if not avg_changes:
             avg_changes = self.avg_change
+
+        if not avg_count:
+            avg_count = self.avg_counter
 
         results_wb, results_sheet = setup_sheets()
 
@@ -217,6 +240,19 @@ class ConsecutiveDays:
                 for cons_days in sorted(avg_changes[group]):
                     results_sheet = add_results(
                         results_sheet, group, cons_days, avg_changes[group][cons_days], new_row, table='Avg Change')
+                    new_row += 1
+
+        new_row = get_row_num('J')
+        if not self.multi_stocks:
+            for cons_days in sorted(avg_count):
+                results_sheet = add_results(
+                    results_sheet, self.ticker, cons_days, avg_count[cons_days][0], new_row, table='Avg Count')
+                new_row += 1
+        else:
+            for group in avg_count.keys():
+                for cons_days in sorted(avg_count[group]):
+                    results_sheet = add_results(
+                        results_sheet, group, cons_days, avg_count[group][cons_days][0], new_row, table='Avg Count')
                     new_row += 1
 
         results_wb.save(self.results_path)
@@ -280,7 +316,7 @@ class MultiConsecutiveDays(ConsecutiveDays):
                                                         self.all_avg_counter[group][key][0], 2)
 
         self.export_results(results=self.all_results,
-                            avg_changes=self.all_avg_change)
+                            avg_changes=self.all_avg_change, avg_count=self.all_avg_counter)
 
 
 if __name__ == '__main__':
@@ -288,8 +324,11 @@ if __name__ == '__main__':
     with open('Index\\DJIA_Tickers.csv') as csv_file:
         csv_reader = csv.reader(csv_file)
 
+        counter = 1
         for ticker in csv_reader:
-            tickers.append(ticker[0])
+            if counter % 6 == 0:
+                tickers.append(ticker[0])
+            counter += 1
 
         stock_obj = MultiConsecutiveDays(tickers)
         stock_obj.get_group_tickers()
