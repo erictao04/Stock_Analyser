@@ -324,11 +324,8 @@ if __name__ == '__main__':
     with open('Index\\DJIA_Tickers.csv') as csv_file:
         csv_reader = csv.reader(csv_file)
 
-        counter = 1
         for ticker in csv_reader:
-            if counter % 6 == 0:
-                tickers.append(ticker[0])
-            counter += 1
+            tickers.append(ticker[0])
 
         stock_obj = MultiConsecutiveDays(tickers)
         stock_obj.get_group_tickers()
